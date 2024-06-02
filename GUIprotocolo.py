@@ -1,15 +1,22 @@
 import tkinter as tk
 from tkinter import ttk
-
+import textwrap
+from tkinter import messagebox
 class ProtocoloTransmision(tk.Tk):
+    
     def __init__(self):
         super().__init__()
+        self.nframe=0
+        self.contador = 1
+        self.permiso = 0
+        self.frames = []
+        self.mensaje_final = ''
 
         self.title("Protocolo de Transmisión de datos")
-        self.geometry("1220x350")
+        self.geometry("1300x350")
 
         # Transmisor
-        tk.Label(self, text="TRANSMISOR").grid(row=0, column=0)
+        tk.Label(self, text="TRANSMISOR").grid(row=0, column=0, columnspan=4)
         tk.Label(self, text="MENSAJE A TRANSMITIR:").grid(row=1, column=0)
         self.mensaje_entry = tk.Entry(self)
         self.mensaje_entry.grid(row=1, column=1)
@@ -26,7 +33,7 @@ class ProtocoloTransmision(tk.Tk):
         tk.Label(self, text="NUM").grid(row=3, column=9)
         tk.Label(self, text="INFORMACIÓN").grid(row=3, column=10)
         
-        self.indicador_trans = tk.Entry(self, )
+        self.indicador_trans = tk.Entry(self)
         self.indicador_trans.grid(row=4, column=4)
         self.ppt_trans = tk.Entry(self, width=4)
         self.ppt_trans.grid(row=4, column=5)
@@ -42,7 +49,7 @@ class ProtocoloTransmision(tk.Tk):
         self.dr_trans.insert(0,'0')
         self.num_trans = tk.Entry(self, width=4)
         self.num_trans.grid(row=4, column=9)
-        self.info_trans = tk.Entry(self, width=4)
+        self.info_trans = tk.Entry(self, width=13)
         self.info_trans.grid(row=4, column=10, columnspan=2)
         
         self.enviar_button = tk.Button(self, text="ENVIAR", command=self.enviar)
@@ -105,7 +112,7 @@ class ProtocoloTransmision(tk.Tk):
         self.dr_resp.insert(0,'0')
         self.num_resp = tk.Entry(self, width=5)
         self.num_resp.grid(row=10, column=9)
-        self.info_resp = tk.Entry(self, width=5)
+        self.info_resp = tk.Entry(self, width=13)
         self.info_resp.grid(row=10, column=10,columnspan=2)
         
         self.responder_button = tk.Button(self, text="RESPONDER", command=self.responder)
@@ -129,25 +136,56 @@ class ProtocoloTransmision(tk.Tk):
         
         tk.Label(self, text="MENSAJE RECIBIDO:").grid(row=13, column=0)
         self.mensaje_recibido = tk.Entry(self)
-        self.mensaje_recibido.grid(row=14, column=1)
+        self.mensaje_recibido.grid(row=13, column=1)
         
         # Secuencia de Tramas
         tk.Label(self, text="SECUENCIA DE TRAMAS:").grid(row=0, column=13)
-        self.secuencia_tramas = tk.Listbox(self)
+        self.secuencia_tramas = tk.Listbox(self, width=50)
         self.secuencia_tramas.grid(row=1, column=13, rowspan=14)
-        self.secuencia_tramas.insert(tk.END, "Trama 1: (Tx)\nControl, permiso para transmitir\n...")
         
     def enviar(self):
-        mensaje = self.mensaje_entry.get()
-        frames = self.frames_entry.get()
-        self.info_trans.delete(0, tk.END)
-        self.info_trans.insert(0, mensaje)
-        self.secuencia_tramas.insert(tk.END, f"Trama (Tx): {mensaje}")
-        
+        n_frames = self.frames_entry.get()
+        self.frames = self.dividir_string_por_longitud(self.mensaje_entry.get(),int(n_frames))
+        if self.radio_ppt_vartr.get() == 1 and self.radio_pt_vartr.get() == 0 and self.radio_dr_vartr.get() == 0 and self.radio_de_vartr.get() == 0:
+            self.secuencia_tramas.insert(tk.END, f"Trama " + str(self.contador) + " (Tx): Control, Permiso para transmitir.")
+            self.contador += 1
+            self.ppt_trans.delete(0, tk.END)
+            self.ppt_trans.insert(0,'0')
+            self.radio_ppt_vartr.set(0)
+            self.num_resp.insert(0, self.frames_entry.get())
+            self.num_trans.insert(0, self.frames_entry.get())
+        elif self.radio_de_vartr.get() == 1 and self.radio_pt_vartr.get() == 0 and self.radio_dr_vartr.get() == 0 and self.radio_ppt_vartr.get() == 0 and self.permiso == 1:
+            self.secuencia_tramas.insert(tk.END, f"Trama " + str(self.contador) + " (Tx): Datos, Trama 1.")
+            self.contador += 1
+        else:
+            messagebox.showinfo("Alerta", "Está incumpliendo las reglas de transmisión")
+            
     def responder(self):
-        self.mensaje_recibido.delete(0, tk.END)
-        self.mensaje_recibido.insert(0, self.info_trans.get())
-        self.secuencia_tramas.insert(tk.END, f"Trama (Rx): {self.info_trans.get()}")
+        if self.radio_pt_varres.get()==1 and self.radio_ppt_varres.get() == 0 and self.radio_de_varres.get() == 0 and self.radio_dr_varres.get() == 0 and self.contador==2:
+            self.secuencia_tramas.insert(tk.END, f"Trama " + str(self.contador) + " (Rx): Control, Permiso concedido para transmitir.")
+            self.info_trans.insert(0, self.frames[self.nframe])
+            self.permiso = 1
+            self.contador += 1
+            self.nframe += 1
+            self.pt_resp.delete(0, tk.END)
+            self.pt_resp.insert(0,'0')
+            self.radio_pt_varres.set(0)
+        elif self.radio_pt_varres.get()==0 and self.radio_ppt_varres.get() == 0 and self.radio_de_varres.get() == 0 and self.radio_dr_varres.get() == 1 and self.contador > 3:
+            if self.nframe < int(self.frames_entry.get()):
+                self.mensaje_final += self.info_trans.get()
+                self.info_trans.delete(0, tk.END)
+                self.info_trans.insert(0, self.frames[self.nframe])
+                self.nframe += 1
+            else:
+                self.mensaje_final += self.info_trans.get()
+                self.mensaje_recibido.insert(0, self.mensaje_final)
+        elif self.radio_pt_varres.get()==0 and self.radio_ppt_varres.get() == 0 and self.radio_de_varres.get() == 0 and self.radio_dr_varres.get() == 0 and self.contador > 3:
+            if self.nframe < int(self.frames_entry.get()):
+                self.info_trans.delete(0, tk.END)
+                self.info_trans.insert(0, self.frames[self.nframe])
+                self.nframe += 1
+            else:
+                self.mensaje_recibido.insert(0, self.mensaje_final)
 
     def update_entry(self, intvar, entry):
         # Actualizar el valor del Entry según el estado del Checkbutton
@@ -157,3 +195,26 @@ class ProtocoloTransmision(tk.Tk):
         else:
             entry.delete(0, tk.END)  # Limpiar el Entry antes de insertar el nuevo valor
             entry.insert(0, '0')
+
+    def dividir_string_por_longitud(self, s, n):
+        longitud = len(s)
+        partes = []
+
+        # Calcular el tamaño base de cada parte
+        base_size = longitud // n
+        remainder = longitud % n
+
+        start = 0
+        for i in range(n):
+            # Si hay un residuo, añadir 1 al tamaño de la parte actual
+            if i < remainder:
+                part_size = base_size + 1
+            else:
+                part_size = base_size
+        
+            end = start + part_size
+            partes.append(s[start:end])
+            start = end
+    
+        return partes
+
